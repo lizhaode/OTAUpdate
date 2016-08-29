@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">OTAUpdate</string>
+    <string name="CheckUpdate">检查更新</string>
+    <string name="SharedUID">android.uid.system</string>
+</resources>
