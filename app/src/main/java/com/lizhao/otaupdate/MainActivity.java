@@ -1,23 +1,32 @@
 package com.lizhao.otaupdate;
 
-import android.app.DownloadManager;
-import android.content.Context;
-import android.database.Cursor;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-import org.dom4j.Document;
-import org.dom4j.DocumentException;
-import org.dom4j.Element;
-import org.dom4j.io.SAXReader;
+
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -25,13 +34,10 @@ public class MainActivity extends AppCompatActivity {
     private Button CheckUpdate;
     private URL mUrl;
     private String mVersion;
-    private String mDownloadService = Context.DOWNLOAD_SERVICE;
-    private DownloadManager mDownloadManager;
-    private DownloadManager.Request mRequest;
-    private DownloadManager.Query mQuery;
-    private Cursor mCursor;
-    private SAXReader mSAXReader;
+    private SAXBuilder mSAXBuilder;
     private Element mRootElement;
+//    private long DownloadedLen = 0;
+    private long FileLen = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,71 +55,129 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     mUrl = new URL("http://172.16.3.48:8080/update/update.xml");
                 } catch (MalformedURLException e) {
-                    Log.d("lizhao","update.xml文件不存在");
+                    Log.d("lizhaodelog","update.xml文件不存在");
                     e.printStackTrace();
                 }
 
+
+                String ReturnVersion = null;
+                String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.xml";
                 try {
-                    String ReturnVersion = ReturnUpdateVersion(mUrl);
+                    ReturnVersion = ReturnUpdateVersion(mUrl,path);
                     if (ReturnVersion.compareTo(mVersion) > 0){
                         Toast.makeText(MainActivity.this,"存在新版本:" + ReturnVersion,Toast.LENGTH_SHORT).show();
 
                         String ReturnPath = ReturnUpdatePath();
-                        Toast.makeText(MainActivity.this,"开始下载升级包,进度可在通知栏查看",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this,"开始下载升级包,请不要进行其他操作",Toast.LENGTH_SHORT).show();
 
-                        long id = StartDown(ReturnPath);
-                        boolean bool = IsDownComplete(id);
-                        if (bool){
-                            Toast.makeText(MainActivity.this,"下载完成已检测到",Toast.LENGTH_SHORT).show();
-                        }
+                        StartDown(ReturnPath);
+
+                        Toast.makeText(MainActivity.this,"下载完成,开始进入 recovery",Toast.LENGTH_SHORT).show();
+
                     }
-                } catch (DocumentException e) {
+                } catch (JDOMException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
         });
+
     }
 
 
-    public String ReturnUpdateVersion(URL url) throws DocumentException {
-        mSAXReader = new SAXReader();
-        Document mDocument = mSAXReader.read(url);
+    public String ReturnUpdateVersion(URL url, final String path) throws JDOMException, IOException {
+
+        OkHttpClient mOkHttpClient = new OkHttpClient();
+        Request mRequest = new Request.Builder().url(url).build();
+        mOkHttpClient.newCall(mRequest).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.d("lizhaode","网络连接失败,请检查网络");
+                e.printStackTrace();
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()){
+                    throw new IOException("获取xml文件失败,response code:" + response.code());
+                }
+
+                byte[] buff = new byte[2048];
+                int len;
+                InputStream mInputStream = response.body().byteStream();
+                File file = new File(path);
+                if (file.exists()){
+                    file.delete();
+                    file.createNewFile();
+                }else {
+                    file.createNewFile();
+                }
+                FileOutputStream mFileOutStream = new FileOutputStream(file);
+                while ((len = mInputStream.read(buff)) != -1){
+                    mFileOutStream.write(buff,0,len);
+                }
+                mFileOutStream.flush();
+                mFileOutStream.close();
+                mInputStream.close();
+            }
+        });
+
+
+
+        File file = new File(path);
+        mSAXBuilder = new SAXBuilder();
+        Document mDocument = mSAXBuilder.build(file);
         mRootElement = mDocument.getRootElement();
 
-        return mRootElement.elementText("version");
+        return mRootElement.getChildText("version");
     }
 
     public String ReturnUpdatePath(){
-        return mRootElement.elementText("path");
+        return mRootElement.getChildText("path");
     }
 
-    public long StartDown(String url){
-        mRequest = new DownloadManager.Request(Uri.parse(url));
-        mRequest.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI);
-        mRequest.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-        mRequest.setTitle("OTA下载");
-        mRequest.setDescription("下载 OTA 升级包中...");
-        mRequest.setDestinationInExternalPublicDir("","update.zip");
-        mDownloadManager = (DownloadManager) getSystemService(mDownloadService);
-        long id = mDownloadManager.enqueue(mRequest);
+    public void StartDown(String url) {
 
-        return id;
-    }
-
-
-    public boolean IsDownComplete(long id){
-        mDownloadManager = (DownloadManager) getSystemService(mDownloadService);
-        mQuery = new DownloadManager.Query().setFilterById(id);
-        mCursor = mDownloadManager.query(mQuery);
-        if (mCursor != null && mCursor.moveToFirst()){
-            int status = mCursor.getInt(mCursor.getColumnIndex(DownloadManager.COLUMN_STATUS));
-            while (true){
-                if (status == DownloadManager.STATUS_SUCCESSFUL){
-                    break;
-                }
-                return true;
+        OkHttpClient mOkHttpClient = new OkHttpClient();
+        Request mRequest = new Request.Builder().url(url).build();
+        mOkHttpClient.newCall(mRequest).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.d("lizhaode", "连接 zip 包失败");
+                e.printStackTrace();
             }
-        }
-        return false;
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    throw new IOException("下载zip 包连接失败,response code:" + response.code());
+                }
+                FileLen = response.body().contentLength();
+                Log.d("lizhaode","update.zip 文件大小:" + String.valueOf(FileLen/1024/1024) + "MB");
+
+                byte[] buff = new byte[2048];
+                int len;
+                InputStream mInputStream = response.body().byteStream();
+                String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip";
+                File file = new File(path);
+                if (file.exists()) {
+                    file.delete();
+                    file.createNewFile();
+                } else {
+                    file.createNewFile();
+                }
+
+                FileOutputStream mFileOutputStream = new FileOutputStream(file);
+                while ((len = mInputStream.read(buff)) != -1) {
+                    mFileOutputStream.write(buff, 0, len);
+//                    DownloadedLen += len;
+//                    Log.d("lizhaode", "已下载数据:" + DownloadedLen/1024/1024 + "MB");
+                }
+                mFileOutputStream.flush();
+                mFileOutputStream.close();
+                mInputStream.close();
+            }
+        });
     }
 }
