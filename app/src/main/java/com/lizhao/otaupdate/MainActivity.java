@@ -3,6 +3,7 @@ package com.lizhao.otaupdate;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.RecoverySystem;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
@@ -21,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.CountDownLatch;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -36,13 +38,15 @@ public class MainActivity extends AppCompatActivity {
     private String mVersion;
     private SAXBuilder mSAXBuilder;
     private Element mRootElement;
-//    private long DownloadedLen = 0;
+    private long DownloadedLen = 0;
     private long FileLen = 0;
+    CountDownLatch OnclikCount;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
 
         ShowVersion = (TextView) findViewById(R.id.VersionShow);
         mVersion = Build.DISPLAY.toString().substring(10);
@@ -70,14 +74,18 @@ public class MainActivity extends AppCompatActivity {
                         String ReturnPath = ReturnUpdatePath();
                         Toast.makeText(MainActivity.this,"开始下载升级包,请不要进行其他操作",Toast.LENGTH_SHORT).show();
 
+                        OnclikCount = new CountDownLatch(1);
                         StartDown(ReturnPath);
+                        OnclikCount.await();
 
                         Toast.makeText(MainActivity.this,"下载完成,开始进入 recovery",Toast.LENGTH_SHORT).show();
-
+                        RecoverySystem.installPackage(MainActivity.this,new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip"));
                     }
                 } catch (JDOMException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
@@ -86,14 +94,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public String ReturnUpdateVersion(URL url, final String path) throws JDOMException, IOException {
+    public String ReturnUpdateVersion(URL url, final String path) throws JDOMException, IOException, InterruptedException {
 
+        final CountDownLatch count = new CountDownLatch(1);
         OkHttpClient mOkHttpClient = new OkHttpClient();
         Request mRequest = new Request.Builder().url(url).build();
         mOkHttpClient.newCall(mRequest).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
                 Log.d("lizhaode","网络连接失败,请检查网络");
+                count.countDown();
                 e.printStackTrace();
             }
 
@@ -120,11 +130,12 @@ public class MainActivity extends AppCompatActivity {
                 mFileOutStream.flush();
                 mFileOutStream.close();
                 mInputStream.close();
+                count.countDown();
             }
         });
 
 
-
+        count.await();
         File file = new File(path);
         mSAXBuilder = new SAXBuilder();
         Document mDocument = mSAXBuilder.build(file);
@@ -137,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
         return mRootElement.getChildText("path");
     }
 
-    public void StartDown(String url) {
+    public void StartDown(String url) throws IOException, InterruptedException {
 
         OkHttpClient mOkHttpClient = new OkHttpClient();
         Request mRequest = new Request.Builder().url(url).build();
@@ -171,12 +182,12 @@ public class MainActivity extends AppCompatActivity {
                 FileOutputStream mFileOutputStream = new FileOutputStream(file);
                 while ((len = mInputStream.read(buff)) != -1) {
                     mFileOutputStream.write(buff, 0, len);
-//                    DownloadedLen += len;
-//                    Log.d("lizhaode", "已下载数据:" + DownloadedLen/1024/1024 + "MB");
+                    DownloadedLen += len;
                 }
                 mFileOutputStream.flush();
                 mFileOutputStream.close();
                 mInputStream.close();
+                OnclikCount.countDown();
             }
         });
     }
