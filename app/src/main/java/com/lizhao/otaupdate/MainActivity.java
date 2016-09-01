@@ -3,6 +3,8 @@ package com.lizhao.otaupdate;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.os.RecoverySystem;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -40,7 +42,22 @@ public class MainActivity extends AppCompatActivity {
     private Element mRootElement;
     private long DownloadedLen = 0;
     private long FileLen = 0;
-    CountDownLatch OnclikCount;
+    private Handler handler = new Handler(){
+        @Override
+        public void handleMessage(Message message){
+            switch (message.what){
+                case 1:
+                    Toast.makeText(MainActivity.this,"下载完成,开始进入 recovery",Toast.LENGTH_SHORT).show();
+                    try {
+                        RecoverySystem.installPackage(MainActivity.this,new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip"));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    break;
+            }
+        }
+    };
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,18 +85,14 @@ public class MainActivity extends AppCompatActivity {
                 String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.xml";
                 try {
                     ReturnVersion = ReturnUpdateVersion(mUrl,path);
-                    if (ReturnVersion.compareTo(mVersion) > 0){
-                        Toast.makeText(MainActivity.this,"存在新版本:" + ReturnVersion,Toast.LENGTH_SHORT).show();
+                    if (ReturnVersion.compareTo(mVersion) > 0) {
+                        Toast.makeText(MainActivity.this, "存在新版本:" + ReturnVersion, Toast.LENGTH_SHORT).show();
 
                         String ReturnPath = ReturnUpdatePath();
-                        Toast.makeText(MainActivity.this,"开始下载升级包,请不要进行其他操作",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, "开始下载升级包,请不要进行其他操作", Toast.LENGTH_SHORT).show();
 
-                        OnclikCount = new CountDownLatch(1);
                         StartDown(ReturnPath);
-                        OnclikCount.await();
 
-                        Toast.makeText(MainActivity.this,"下载完成,开始进入 recovery",Toast.LENGTH_SHORT).show();
-                        RecoverySystem.installPackage(MainActivity.this,new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip"));
                     }
                 } catch (JDOMException e) {
                     e.printStackTrace();
@@ -167,7 +180,7 @@ public class MainActivity extends AppCompatActivity {
                 FileLen = response.body().contentLength();
                 Log.d("lizhaode","update.zip 文件大小:" + String.valueOf(FileLen/1024/1024) + "MB");
 
-                byte[] buff = new byte[2048];
+                byte[] buff = new byte[4194304];
                 int len;
                 InputStream mInputStream = response.body().byteStream();
                 String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip";
@@ -187,7 +200,9 @@ public class MainActivity extends AppCompatActivity {
                 mFileOutputStream.flush();
                 mFileOutputStream.close();
                 mInputStream.close();
-                OnclikCount.countDown();
+                Message message = new Message();
+                message.what = 1;
+                handler.sendMessage(message);
             }
         });
     }
