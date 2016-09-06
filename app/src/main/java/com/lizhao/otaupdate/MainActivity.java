@@ -10,6 +10,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,12 +37,13 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView ShowVersion;
     private Button CheckUpdate;
+    private ProgressBar mProgressBar;
     private URL mUrl;
     private String mVersion;
     private SAXBuilder mSAXBuilder;
     private Element mRootElement;
-    private long DownloadedLen = 0;
-    private long FileLen = 0;
+    private int progress;
+
     private Handler handler = new Handler(){
         @Override
         public void handleMessage(Message message){
@@ -49,11 +51,14 @@ public class MainActivity extends AppCompatActivity {
                 case 1:
                     Toast.makeText(MainActivity.this,"下载完成,开始进入 recovery",Toast.LENGTH_SHORT).show();
                     try {
-                        RecoverySystem.installPackage(MainActivity.this,new File(Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip"));
+                        RecoverySystem.installPackage(MainActivity.this,new File("/data/update.zip"));
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                     break;
+                case 2:
+                    mProgressBar.setVisibility(View.VISIBLE);
+                    mProgressBar.setProgress(progress);
             }
         }
     };
@@ -64,9 +69,9 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-
+        mProgressBar = (ProgressBar) findViewById(R.id.DownProgress);
         ShowVersion = (TextView) findViewById(R.id.VersionShow);
-        mVersion = Build.DISPLAY.toString().substring(10);
+        mVersion = Build.DISPLAY.substring(10);
         ShowVersion.setText("当前版本:" + mVersion);
 
         CheckUpdate = (Button) findViewById(R.id.CheckUpdate);
@@ -92,6 +97,7 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(MainActivity.this, "开始下载升级包,请不要进行其他操作", Toast.LENGTH_SHORT).show();
 
                         StartDown(ReturnPath);
+
 
                     }
                 } catch (JDOMException e) {
@@ -177,13 +183,15 @@ public class MainActivity extends AppCompatActivity {
                 if (!response.isSuccessful()) {
                     throw new IOException("下载zip 包连接失败,response code:" + response.code());
                 }
-                FileLen = response.body().contentLength();
-                Log.d("lizhaode","update.zip 文件大小:" + String.valueOf(FileLen/1024/1024) + "MB");
+                 long fileLen = response.body().contentLength()/1024/1024;
+                Log.d("lizhaode","update.zip 文件大小:" + String.valueOf(fileLen) + "MB");
 
-                byte[] buff = new byte[4194304];
+                byte[] buff = new byte[104857600];
                 int len;
                 InputStream mInputStream = response.body().byteStream();
-                String path = Environment.getExternalStorageDirectory().getAbsolutePath() + "/update.zip";
+                String path = Environment.getDataDirectory().getAbsolutePath() + "/update.zip";
+                Log.d("lizhaode",path);
+
                 File file = new File(path);
                 if (file.exists()) {
                     file.delete();
@@ -193,9 +201,14 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 FileOutputStream mFileOutputStream = new FileOutputStream(file);
+                long DownloadLen = 0;
                 while ((len = mInputStream.read(buff)) != -1) {
                     mFileOutputStream.write(buff, 0, len);
-                    DownloadedLen += len;
+                    DownloadLen += len;
+                    progress = (int) (DownloadLen*100/1024/1024/fileLen);
+                    Message message = new Message();
+                    message.what = 2;
+                    handler.sendMessage(message);
                 }
                 mFileOutputStream.flush();
                 mFileOutputStream.close();
@@ -206,4 +219,5 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
 }

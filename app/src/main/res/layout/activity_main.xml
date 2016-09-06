@@ -15,25 +15,24 @@
         android:layout_centerVertical="true"
         android:layout_centerHorizontal="true"
         android:id="@+id/VersionShow" />
-    <!--<ProgressBar-->
-        <!--android:id="@+id/DownProgress"-->
-        <!--android:layout_width="wrap_content"-->
-        <!--android:layout_height="wrap_content"-->
-        <!--style="?android:attr/progressBarStyleHorizontal"-->
-        <!--android:max="100"-->
-        <!--android:progress="0"-->
-        <!--android:visibility="visible"-->
-        <!--android:layout_below="@+id/VersionShow"-->
-        <!--android:layout_centerHorizontal="true"-->
-        <!--android:layout_centerVertical="true"-->
-        <!--android:layout_marginTop="12dp"/>-->
+
+    <ProgressBar
+        android:id="@+id/DownProgress"
+        android:layout_width="100dp"
+        android:layout_height="wrap_content"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:progress="0"
+        android:layout_below="@+id/VersionShow"
+        android:layout_centerHorizontal="true"
+        android:layout_marginTop="12dp"
+        android:visibility="gone"/>
 
     <Button
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/CheckUpdate"
         android:id="@+id/CheckUpdate"
-        android:layout_below="@+id/VersionShow"
+        android:layout_below="@+id/DownProgress"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="12dp" />
 </RelativeLayout>
