@@ -9,6 +9,7 @@ import android.os.RecoverySystem;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -68,16 +69,22 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+    }
 
+    @Override
+    protected void onStart(){
+        super.onStart();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mProgressBar = (ProgressBar) findViewById(R.id.DownProgress);
         ShowVersion = (TextView) findViewById(R.id.VersionShow);
         mVersion = Build.DISPLAY.substring(10);
-        ShowVersion.setText("当前版本:" + mVersion);
+        ShowVersion.setText(String.format("当前版本:%s",mVersion));
 
         CheckUpdate = (Button) findViewById(R.id.CheckUpdate);
         CheckUpdate.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                CheckUpdate.setEnabled(false);
                 try {
                     mUrl = new URL("http://172.16.3.48:8080/update/update.xml");
                 } catch (MalformedURLException e) {
@@ -91,14 +98,12 @@ public class MainActivity extends AppCompatActivity {
                 try {
                     ReturnVersion = ReturnUpdateVersion(mUrl,path);
                     if (ReturnVersion.compareTo(mVersion) > 0) {
-                        Toast.makeText(MainActivity.this, "存在新版本:" + ReturnVersion, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(MainActivity.this, String.format("存在新版本:%s",ReturnVersion), Toast.LENGTH_SHORT).show();
 
                         String ReturnPath = ReturnUpdatePath();
                         Toast.makeText(MainActivity.this, "开始下载升级包,请不要进行其他操作", Toast.LENGTH_SHORT).show();
 
                         StartDown(ReturnPath);
-
-
                     }
                 } catch (JDOMException e) {
                     e.printStackTrace();
@@ -129,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()){
-                    throw new IOException("获取xml文件失败,response code:" + response.code());
+                    throw new IOException(String.format("获取xml文件失败,response code:%s",response.code()));
                 }
 
                 byte[] buff = new byte[2048];
@@ -181,10 +186,10 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 if (!response.isSuccessful()) {
-                    throw new IOException("下载zip 包连接失败,response code:" + response.code());
+                    throw new IOException(String.format("下载zip 包连接失败,response code:%s",response.code()));
                 }
                  long fileLen = response.body().contentLength()/1024/1024;
-                Log.d("lizhaode","update.zip 文件大小:" + String.valueOf(fileLen) + "MB");
+                Log.d("lizhaode",String.format("update.zip 文件大小:%sMB",String.valueOf(fileLen)));
 
                 byte[] buff = new byte[104857600];
                 int len;
@@ -213,6 +218,7 @@ public class MainActivity extends AppCompatActivity {
                 mFileOutputStream.flush();
                 mFileOutputStream.close();
                 mInputStream.close();
+
                 Message message = new Message();
                 message.what = 1;
                 handler.sendMessage(message);
